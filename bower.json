@@ -1,0 +1,28 @@
+{
+  "name": "purescript-dygraphs",
+  "version": "0.0.1",
+  "homepage": "https://github.com/fluffynukeit/purescript-dygraphs",
+  "description": "Purescript bindings for dygraphs",
+  "keywords": [
+    "purescript",
+    "dygraphs"
+  ],
+  "license": "MIT",
+  "private": true,
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
+  ],
+  "dependencies": {
+    "dygraphs":"1.0.1+bower", 
+    "purescript-maybe":"*",
+    "purescript-either":"*",
+    "purescript-dom":"*",
+    "purescript-maps":"*",
+    "purescript-oo-ffi":"*",
+    "purescript-foreign-options":"fluffynukeit/purescript-foreign-options"
+  }
+}
