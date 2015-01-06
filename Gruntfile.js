@@ -26,28 +26,15 @@ module.exports = function(grunt) {
         src: ["<%=libFiles%>", "examples/examples.purs"],
         dest: "tmp/Examples.js"
       }
-    },
-
-    copy: [
-      {
-        expand: true,
-        cwd: "node_modules",
-        src: "**",
-        dest: "tmp/node_modules/"
-      }
-    ]
-
-    
+    }
   }
   );
 
   grunt.loadNpmTasks("grunt-contrib-clean");
   grunt.loadNpmTasks("grunt-purescript");
-  grunt.loadNpmTasks("grunt-execute");
-  grunt.loadNpmTasks("grunt-contrib-copy");
 
   grunt.registerTask("make", ["pscMake", "dotPsci", "pscDocs"]);
   grunt.registerTask("default", ["clean", "make", "examples"]);
-  grunt.registerTask("examples", ["psc", "copy"]);
+  grunt.registerTask("examples", ["psc"]);
 };
 

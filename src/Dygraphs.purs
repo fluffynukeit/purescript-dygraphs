@@ -1,8 +1,8 @@
 
 module DyGraphs 
   ( DyXValue(), xNumber, xDate
-  , DyWindow(), dateWindow
-  , DyAxisName(), x, y, y2
+  , DyRange(), range, unRange
+  , DyAxis(), y, y2
   , DySeriesOpts()
   , DyGranularity()
   , secondly      
@@ -67,10 +67,11 @@ where
 
 import Data.Either
 import Data.Maybe
+import Data.Function
 import Control.Monad.Eff
 import DOM (Node())
 import Data.StrMap (StrMap())
-import Data.Foreign.OOFFI (instantiate3)
+import Data.Foreign.OOFFI
 import Data.Foreign.Options (toOptions)
 
 newtype DySeriesName = DySeriesName String
@@ -126,14 +127,15 @@ newtype DyAnnotation = DyAnnotation
 
 -- * Per series options
 
-newtype DyWindow = DyWindow [Number]
-dateWindow min max | min <= max = DyWindow [min, max]
-dateWindow min max              = DyWindow [max, min]
+newtype DyRange = DyRange [Number]
+range min max | min <= max = DyRange [min, max]
+range min max              = DyRange [max, min]
 
-newtype DyAxisName = DyAxisName String
-x  = DyAxisName "x"
-y  = DyAxisName "y"
-y2 = DyAxisName "y2"
+unRange (DyRange a) = a
+
+newtype DyAxis = DyAxis String
+y  = DyAxis "y"
+y2 = DyAxis "y2"
 
 type DyDrawPointCallback = forall eff.
   DyGraph -> 
@@ -148,7 +150,7 @@ type DyDrawPointCallback = forall eff.
 type DyPattern = [Number]
 
 type DySeriesOpts = 
-  { axis :: DyAxisName
+  { axis :: DyAxis
   , color :: Maybe Color
   , connectSeparatedPoints :: Maybe Boolean
   , drawGapEdgePoint :: Maybe Boolean
@@ -237,9 +239,9 @@ type DyAxisOpts =
   , pixelsPerLabel :: Maybe Number
   , ticker :: Maybe DyTicker
   , valueFormatter :: Maybe DyValueFormatter
-  , valueRange :: Maybe DyWindow
+  , valueRange :: Maybe DyRange
   -- DySeriesOpts
-  -- , axis :: DyAxisName -- no axis name for across axes opts
+  -- , axis :: DyAxis -- no axis name for across axes opts
   , color :: Maybe Color
   , connectSeparatedPoints :: Maybe Boolean
   , drawGapEdgePoint :: Maybe Boolean
@@ -262,17 +264,17 @@ type DyAxisOpts =
 
 -- * Graph wide options
 
-type DyClickCallback = forall eff. Event -> Number -> [DyPoint] -> Eff (|eff) Unit
+type DyClickCallback e = Event -> Number -> [DyPoint] -> Eff e Unit
 
-type DyDrawCallback = forall eff. DyGraph -> Boolean -> Eff (|eff) Unit
+type DyDrawCallback e = DyGraph -> Boolean -> Eff e Unit
 
-type DyHighlightCallback = forall eff. 
+type DyHighlightCallback e =  
   Event -> 
   Number -> 
   [DyPoint] -> 
   Number -> 
   String -> 
-  Eff (|eff) Unit
+  Eff e Unit
 
 type DyPointClickCallback = forall eff. Event -> DyPoint -> Eff (|eff) Unit
 
@@ -302,31 +304,27 @@ never = DyLegendMode "never"
 follow = DyLegendMode "follow"
 onMouseOver = DyLegendMode "onmouseover"
 
-type DyOpts = 
+type DyOpts a b c = 
   { annotationClickHandler :: Maybe DyAnnotationHandler
   , annotationDblClickHandler :: Maybe DyAnnotationHandler
   , annotationMouseOutHandler :: Maybe DyAnnotationHandler
   , annotationMouseOverHandler :: Maybe DyAnnotationHandler
   , displayAnnotations :: Maybe Boolean
   , axisTickSize :: Maybe Number
-  , dateWindow :: Maybe DyWindow
+  , dateWindow :: Maybe DyRange
   , drawAxesAtZero :: Maybe Boolean
-  , drawXAxis :: Maybe Boolean
-  , drawYAxis :: Maybe Boolean
   , panEdgeFraction :: Maybe Number
   , xAxisHeight :: Maybe Number
-  , xAxisLabelWidth :: Maybe Number
   , xRangePad :: Maybe Number
-  , yAxisLabelWidth :: Maybe Number
   , yRangePad :: Maybe Number
   , customBars :: Maybe Boolean
   , delimiter :: Maybe String
   , errorBars :: Maybe Boolean
   , fractions :: Maybe Boolean
   , xValueParser :: Maybe (String -> Number)
-  , clickCallback :: Maybe DyClickCallback
-  , drawCallback :: Maybe DyDrawCallback
-  , highlightCallback :: Maybe DyHighlightCallback
+  , clickCallback :: Maybe (DyClickCallback a)
+  , drawCallback :: Maybe (DyDrawCallback b)
+  , highlightCallback :: Maybe (DyHighlightCallback c)
   , pointClickCallback :: Maybe DyPointClickCallback
   , underlayCallback :: Maybe DyUnderlayCallback
   , unhighlightCallback :: Maybe DyUnhighlightCallback
@@ -339,6 +337,7 @@ type DyOpts =
   , y2label :: Maybe String
   , yLabelWidth :: Maybe Number
   --, plugins :: Maybe DyPlugin
+  --, dataHandler :: Foreign? Skip this one for now
   , file :: Maybe DyData
   , stackedGraph :: Maybe Boolean
   , stackedGraphNaNFill :: Maybe String
@@ -360,6 +359,7 @@ type DyOpts =
   , rangeSelectorPlotStrokeColor :: Maybe Color
   , showLabelsOnHighlight :: Maybe Boolean
   , showRangeSelector :: Maybe Boolean
+  , showInRangeSelector :: Maybe Boolean
   , showRoller :: Maybe Boolean
   , labels :: Maybe [String]
   , labelsDiv :: Maybe Node
@@ -375,12 +375,13 @@ type DyOpts =
   , digitsAfterDecimal :: Maybe Number
   , labelsKMB :: Maybe Boolean
   , labelsKMG2 :: Maybe Boolean
+  , labelsUTC :: Maybe Boolean
   , maxNumberWidth :: Maybe Number
   , sigFigs :: Maybe Number
   , isZoomedIgnoreProgrammaticZoom :: Maybe Boolean
   , axes :: Maybe ({ x :: Maybe DyAxisOpts
                    , y :: Maybe DyAxisOpts
-                   , z :: Maybe DyAxisOpts})
+                   , y2 :: Maybe DyAxisOpts})
 
   -- DyAxisOpts
   , axisLabelColor :: Maybe Color
@@ -400,10 +401,10 @@ type DyOpts =
   , pixelsPerLabel :: Maybe Number
   , ticker :: Maybe DyTicker
   , valueFormatter :: Maybe DyValueFormatter
-  , valueRange :: Maybe DyWindow
+  , valueRange :: Maybe DyRange
 
   -- DySeriesOpts
-  -- , axis :: DyAxisName -- No axis names for across graph opts
+  -- , axis :: DyAxis -- No axis names for across graph opts
   , color :: Maybe Color
   , connectSeparatedPoints :: Maybe Boolean
   , drawGapEdgePoint :: Maybe Boolean
@@ -423,7 +424,7 @@ type DyOpts =
 
   }
 
-defaultDyOpts :: DyOpts
+defaultDyOpts :: forall a b c. DyOpts a b c
 defaultDyOpts = 
   { annotationClickHandler : Nothing
   , annotationDblClickHandler : Nothing
@@ -433,13 +434,9 @@ defaultDyOpts =
   , axisTickSize : Nothing
   , dateWindow : Nothing
   , drawAxesAtZero : Nothing
-  , drawXAxis : Nothing
-  , drawYAxis : Nothing
   , panEdgeFraction : Nothing
   , xAxisHeight : Nothing
-  , xAxisLabelWidth : Nothing
   , xRangePad : Nothing
-  , yAxisLabelWidth : Nothing
   , yRangePad : Nothing
   , customBars : Nothing
   , delimiter : Nothing
@@ -461,6 +458,7 @@ defaultDyOpts =
   , y2label : Nothing
   , yLabelWidth : Nothing
   --, plugins : Nothing
+  --, dataHandler : Nothing?
   , file : Nothing
   , stackedGraph : Nothing
   , stackedGraphNaNFill : Nothing
@@ -482,6 +480,7 @@ defaultDyOpts =
   , rangeSelectorPlotStrokeColor : Nothing
   , showLabelsOnHighlight : Nothing
   , showRangeSelector : Nothing
+  , showInRangeSelector : Nothing
   , showRoller : Nothing
   , labels : Nothing
   , labelsDiv : Nothing
@@ -497,6 +496,7 @@ defaultDyOpts =
   , digitsAfterDecimal : Nothing
   , labelsKMB : Nothing
   , labelsKMG2 : Nothing
+  , labelsUTC : Nothing
   , maxNumberWidth : Nothing
   , sigFigs : Nothing
   , isZoomedIgnoreProgrammaticZoom : Nothing
@@ -542,7 +542,163 @@ defaultDyOpts =
 
   }
 
-newDyGraph :: forall e. Node -> DyData -> DyOpts -> Eff (runDyGraph :: RunDyGraph | e) DyGraph
+-- * Dygraph object and methods
+
+foreign import unsafeNullToMaybeImpl
+  """
+  function unsafeNullToMaybeImpl(just, nothing, val) {
+    return val === null ? nothing : just(val);
+  }
+  """ :: forall a . Fn3 (a -> Maybe a) (Maybe a) a (Maybe a)
+
+unsafeNullToMaybe = runFn3 unsafeNullToMaybeImpl Just Nothing
+
+newDyGraph :: forall e a b c. Node -> DyData -> DyOpts a b c -> Eff (runDyGraph::RunDyGraph|e) DyGraph
 newDyGraph div (CSV file) opts = instantiate3 "Dygraph" div file (toOptions opts)
 newDyGraph div (URL file) opts = instantiate3 "Dygraph" div file (toOptions opts)
 newDyGraph div (Array2D file) opts = instantiate3 "Dygraph" div file (toOptions opts)
+
+adjustRoll :: forall e. DyGraph -> Number -> Eff (runDyGraph::RunDyGraph|e) Unit
+adjustRoll = method1Eff "adjustRoll"
+
+annotations :: forall e. DyGraph -> Eff (runDyGraph::RunDyGraph|e) [DyAnnotation]
+annotations = method0Eff "annotations"
+
+clearSelection :: forall e. DyGraph -> Eff (runDyGraph::RunDyGraph|e) Unit
+clearSelection = method0Eff "clearSelection"
+
+destroy :: forall e. DyGraph -> Eff (runDyGraph::RunDyGraph|e) Unit
+destroy = method0Eff "destroy"
+
+eventToDomCoords :: forall e. DyGraph -> Event -> Eff (runDyGraph::RunDyGraph|e) [Number]
+eventToDomCoords = method1Eff "eventToDomCoords"
+
+getArea :: forall e. DyGraph -> Eff (runDyGraph::RunDyGraph|e) {x::Number, y::Number, w::Number, h::Number}
+getArea = method0Eff "getArea"
+
+getColors :: forall e. DyGraph -> Eff (runDyGraph::RunDyGraph|e) [Color]
+getColors = method0Eff "getColors"
+
+getHighlightSeries :: forall e. DyGraph -> Eff (runDyGraph::RunDyGraph|e) DySeriesName
+getHighlightSeries d = DySeriesName <$> method0Eff "getHighlightSeries" d
+
+getLabels :: forall e. DyGraph -> Eff (runDyGraph::RunDyGraph|e) (Maybe [String])
+getLabels d = unsafeNullToMaybe <$> method0Eff "getLabels" d
+
+getOption :: forall e. DyGraph -> String -> Maybe DySeriesName -> Eff (runDyGraph::RunDyGraph|e) DyOptionValue
+getOption d s Nothing = method1Eff "getOption" d s
+getOption d s (Just n)= method2Eff "getOption" d s n
+
+getPropertiesForSeries 
+  :: forall e. DyGraph 
+  -> DySeriesName 
+  -> Eff (runDyGraph::RunDyGraph|e) (Maybe {column::Number, visibility::Boolean, color::Color, axis::Number})
+getPropertiesForSeries d (DySeriesName n) = 
+  unsafeNullToMaybe <$> method1Eff "getPropertiesForSeries" d n
+
+getSelection :: forall e. DyGraph -> Eff (runDyGraph::RunDyGraph|e) (Maybe Number)
+getSelection d = do
+  sel <- method0Eff "getSelection" d
+  return $ if sel == -1 then Nothing else Just sel
+
+getValue :: forall e. DyGraph -> Number -> Number -> Eff (runDyGraph::RunDyGraph|e) (Maybe Number)
+getValue d r c = unsafeNullToMaybe <$> method2Eff "getValue" d r c
+
+indexFromSetName :: forall e. DyGraph -> DySeriesName -> Eff (runDyGraph::RunDyGraph|e) (Maybe Number)
+indexFromSetName d (DySeriesName n) = unsafeNullToMaybe <$> method1Eff "indexFromSetName" d n
+
+isSeriesLocked :: forall e. DyGraph -> Eff (runDyGraph::RunDyGraph|e) Boolean
+isSeriesLocked = method0Eff "isSeriesLocked"
+
+isZoomed :: forall e. DyGraph -> Maybe DyAxis -> Eff (runDyGraph::RunDyGraph|e) Boolean
+isZoomed d Nothing = method0Eff "isZoomed" d
+isZoomed d (Just (DyAxis a)) = method1Eff "isZoomed" d a
+
+numAxes :: forall e. DyGraph -> Eff (runDyGraph::RunDyGraph|e) Number
+numAxes = method0Eff "numAxes"
+
+numColumns :: forall e. DyGraph -> Eff (runDyGraph::RunDyGraph|e) Number
+numColumns = method0Eff "numColumns"
+
+numRows :: forall e. DyGraph -> Eff (runDyGraph::RunDyGraph|e) Number
+numRows = method0Eff "numRows"
+
+ready :: forall a e. DyGraph -> (DyGraph -> Eff (|a) Unit) -> Eff (runDyGraph::RunDyGraph|e) Unit
+ready d f = 
+  let fCallback = mkFn1 f in method1Eff "ready" d fCallback
+
+resetZoom :: forall e. DyGraph -> Eff (runDyGraph::RunDyGraph|e) Unit
+resetZoom = method0Eff "resetZoom"
+
+resize :: forall e. DyGraph -> Maybe {width::Number, height::Number} -> Eff (runDyGraph::RunDyGraph|e) Unit
+resize d Nothing = method0Eff "resize" d
+resize d (Just {width=w, height=h}) = method2Eff "resize" d w h
+
+rollPeriod :: forall e. DyGraph -> Eff (runDyGraph::RunDyGraph|e) Number
+rollPeriod = method0Eff "rollPeriod"
+
+setAnnotations :: forall e. DyGraph -> [DyAnnotation] -> Maybe Boolean -> Eff (runDyGraph::RunDyGraph|e) Unit
+setAnnotations d as Nothing = method1Eff "setAnnotations" d as
+setAnnotations d as (Just b) = method2Eff "setAnnotations" d as b
+
+setSelection :: forall e. DyGraph -> Number -> Maybe DySeriesName -> Maybe Boolean -> Eff (runDyGraph::RunDyGraph|e) Unit
+setSelection d r Nothing Nothing = method1Eff "setSelection" d r
+setSelection d r (Just (DySeriesName n)) Nothing = method2Eff "setSelection" d r n
+setSelection d r (Just (DySeriesName n)) (Just b) = method3Eff "setSelection" d r n b
+
+setVisibility :: forall e. DyGraph -> Number -> Boolean -> Eff (runDyGraph::RunDyGraph|e) Unit
+setVisibility = method2Eff "setVisibility"
+
+toDataCoords :: forall e. DyGraph -> Number -> Number -> Maybe DyAxis -> Eff (runDyGraph::RunDyGraph|e) [Number]
+toDataCoords d x y Nothing = method2Eff "toDataCoords" d x y
+toDataCoords d x y (Just (DyAxis a)) = method3Eff "toDataCoords" d x y a
+
+toDataXCoord :: forall e. DyGraph -> Number -> Eff (runDyGraph::RunDyGraph|e) Number
+toDataXCoord = method1Eff "toDataXCoord"
+
+toDataYCoord :: forall e. DyGraph -> Number -> Maybe DyAxis -> Eff (runDyGraph::RunDyGraph|e) Number
+toDataYCoord d n Nothing = method1Eff "toDataYCoord" d n
+toDataYCoord d n (Just (DyAxis a)) = method2Eff "toDataYCoord" d n a
+
+toDomCoords :: forall e. DyGraph -> Number -> Number -> Maybe DyAxis -> Eff (runDyGraph::RunDyGraph|e) [Number]
+toDomCoords d x y Nothing = method2Eff "toDomCoords" d x y
+toDomCoords d x y (Just (DyAxis a)) = method3Eff "toDomCoords" d x y a
+
+toDomXCoord :: forall e. DyGraph -> Number -> Eff (runDyGraph::RunDyGraph|e) Number
+toDomXCoord = method1Eff "toDomXCoord"
+
+toDomYCoord :: forall e. DyGraph -> Number -> Maybe DyAxis -> Eff (runDyGraph::RunDyGraph|e) Number
+toDomYCoord d n Nothing = method1Eff "toDomYCoord" d n
+toDomYCoord d n (Just (DyAxis a)) = method2Eff "toDomYCoord" d n a
+
+toPercentXCoord :: forall e. DyGraph -> Number -> Eff (runDyGraph::RunDyGraph|e) Number
+toPercentXCoord = method1Eff "toPercentXCoord"
+
+toPercentYCoord :: forall e. DyGraph -> Number -> Maybe DyAxis -> Eff (runDyGraph::RunDyGraph|e) Number
+toPercentYCoord d n Nothing = method1Eff "toPercentYCoord" d n
+toPercentYCoord d n (Just (DyAxis a)) = method2Eff "toPercentYCoord" d n a
+
+toString :: forall e. DyGraph -> Eff (runDyGraph::RunDyGraph|e) String
+toString = method0Eff "toString"
+
+updateOptions :: forall e a b c. DyGraph -> DyOpts a b c -> Maybe Boolean -> Eff (runDyGraph::RunDyGraph|e) Unit
+updateOptions d o Nothing = method1Eff "updateOptions" d o
+updateOptions d o (Just b)= method2Eff "updateOptions" d o b
+
+visibility :: forall e. DyGraph -> Eff (runDyGraph::RunDyGraph|e) [Boolean]
+visibility = method0Eff "visibility"
+
+xAxisExtremes :: forall e. DyGraph -> Eff (runDyGraph::RunDyGraph|e) DyRange
+xAxisExtremes d = DyRange <$> method0Eff "xAxisExtremes" d
+
+xAxisRange :: forall e. DyGraph -> Eff (runDyGraph::RunDyGraph|e) DyRange
+xAxisRange d = DyRange <$> method0Eff "xAxisRange" d
+
+yAxisRange :: forall e. DyGraph -> Maybe DyAxis -> Eff (runDyGraph::RunDyGraph|e) DyRange
+yAxisRange d Nothing = DyRange <$> method0Eff "yAxisRange" d
+yAxisRange d (Just (DyAxis a)) = DyRange <$> method1Eff "yAxisRange" d a
+
+yAxisRanges :: forall e. DyGraph -> Eff (runDyGraph::RunDyGraph|e) [DyRange]
+yAxisRanges d = (<$>) DyRange <$> method0Eff "yAxisRanges" d
+
+

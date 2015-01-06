@@ -9,13 +9,23 @@ import Data.Function
 import Debug.Trace
 
 main = do
-  tryMakeGraph "#graph1" $ \d -> void (newDyGraph d plotData defaultDyOpts)
-  tryMakeGraph "#graph2" $ \d -> void (newDyGraph d plotData2 defaultDyOpts {stepPlot = Just true})
+  tryWithNode "#graph1" $ \d -> newDyGraph d plotData defaultDyOpts
+  tryWithNode "#graph2" $ \d -> 
+    newDyGraph d plotData2 defaultDyOpts
+      { stepPlot = Just true 
+      , clickCallback = Just $ \e x pts -> do
+          tryWithNode "#msg" $ setText "Canvas clicked!"
+      , highlightCallback = Just $ \e x pts r s -> do
+          tryWithNode "#msg" $ setText "Point highlighted!"
+      , title = Just $ "Chart with non-default options"
+      , xlabel = Just $ "X label here"
+      , ylabel = Just $ "Y label here!"
+      }
 
-tryMakeGraph divName graphFun = do
+tryWithNode divName fun = do
   maybeDiv <- querySelector divName
   case maybeDiv of
-    Just div -> graphFun div
+    Just div -> void $ fun div
     Nothing -> trace $ "Cannot find node " ++ divName
 
 plotData = CSV "0,1,10\n1,2,20\n2,3,30\n3,4,40"
