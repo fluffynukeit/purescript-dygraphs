@@ -17,12 +17,12 @@
     "tests"
   ],
   "dependencies": {
-    "dygraphs":"1.1.0", 
+    "dygraphs":"1.1.1", 
     "purescript-maybe":"*",
     "purescript-either":"*",
     "purescript-dom":"*",
     "purescript-maps":"*",
     "purescript-oo-ffi":"*",
-    "purescript-foreign-options":"fluffynukeit/purescript-foreign-options"
+    "purescript-foreign-options":"git://github.com/clayrat/purescript-foreign-options.git#be28f07cd2caf4a0b489f57daa2c34ff32be81d3"
   }
 }
