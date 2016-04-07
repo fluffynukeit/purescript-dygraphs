@@ -23,6 +23,7 @@
     "purescript-dom":"*",
     "purescript-maps":"*",
     "purescript-oo-ffi":"*",
-    "purescript-foreign-options":"*"
+    "purescript-foreign-options":"*",
+    "purescript-debug" : "*"
   }
 }
