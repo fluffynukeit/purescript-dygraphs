@@ -23,6 +23,6 @@
     "purescript-dom":"*",
     "purescript-maps":"*",
     "purescript-oo-ffi":"*",
-    "purescript-foreign-options":"git://github.com/clayrat/purescript-foreign-options.git#be28f07cd2caf4a0b489f57daa2c34ff32be81d3"
+    "purescript-foreign-options":"*"
   }
 }
