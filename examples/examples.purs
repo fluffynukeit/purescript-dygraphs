@@ -1,7 +1,9 @@
-module Examples where
+module Main where
 
+import Prelude
 import DyGraphs
 import DOM
+import DOM.Node.Types (Node())
 import Control.Monad.Eff
 import Data.Maybe
 import Data.Function
@@ -26,34 +28,18 @@ tryWithNode divName fun = do
   maybeDiv <- querySelector divName
   case maybeDiv of
     Just div -> void $ fun div
-    Nothing -> trace $ "Cannot find node " ++ divName
+    Nothing -> pure $ trace ("Cannot find node " ++ divName) (\_ -> unit)	
 
 plotData = CSV "0,1,10\n1,2,20\n2,3,30\n3,4,40"
 
-plotData2 = Array2D $ [ [0, 0, 0, 0]
-                      , [0.1, 0.1, -0.2, 0.3]
-                      , [0.2, -0.1, 0.2, 0.3]
+plotData2 = Array2D $ [ [0.0,  0.0,   0.0,  0.0]
+                      , [0.1,  0.1,  -0.2,  0.3]
+                      , [0.2, -0.1,   0.2,  0.3]
                       , [0.3, 0.15, -0.25, -0.3] 
                       ]
-
-foreign import querySelectorImpl
-  "function querySelectorImpl(r, f, s) {\
-  \ return function() {\
-  \ var result = document.querySelector(s);\
-  \ return result ? f(result) : r;\
-  \ };\
-  \}" :: forall eff r. Fn3 r (Node -> r) String (Eff (dom :: DOM | eff) r)
+foreign import querySelectorImpl :: forall eff r. Fn3 r (Node -> r) String (Eff (dom :: DOM | eff) r)
 
 querySelector :: forall eff. String -> Eff (dom :: DOM | eff) (Maybe Node)
 querySelector s = runFn3 querySelectorImpl Nothing Just s
 
-
-foreign import setText
-  "function setText(text) {\
-  \ return function(node) {\
-  \ return function() {\
-  \ node.textContent = text;\
-  \ return node;\
-  \ };\
-  \ };\
-  \}" :: forall eff. String -> Node -> Eff (dom :: DOM | eff) Node 
+foreign import setText :: forall eff. String -> Node -> Eff (dom :: DOM | eff) Node 
